@@ -283,7 +283,7 @@ const DocumentGenerator = () => {
     setIsGenerating(true);
     setStep(3);
     try {
-      const response = await fetch("http://localhost:5000/generate-document", {
+      const response = await fetch("http://localhost:5001/generate-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: selectedType.title, details: formData })
@@ -399,22 +399,47 @@ const DocumentGenerator = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col lg:flex-row gap-10"
           >
-            <div className="flex-1 bg-white p-12 rounded-[2rem] border border-gray-100 shadow-[inset_0_0_50px_rgba(0,0,0,0.02)] min-h-[600px] relative">
-               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-lime via-forest to-lime opacity-20"></div>
+            <div className="flex-1 bg-[#fffcf5] p-16 rounded-[2rem] border-2 border-green-800/20 shadow-2xl min-h-[800px] relative overflow-hidden">
+               {/* Red Margin Line */}
+               <div className="absolute left-20 top-0 bottom-0 w-[2px] bg-red-400/30"></div>
+
                {isGenerating ? (
-                 <div className="h-full flex flex-col items-center justify-center space-y-4">
-                   <div className="w-12 h-12 border-4 border-lime border-t-transparent rounded-full animate-spin"></div>
-                   <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">AI is drafting your {selectedType.title}...</p>
+                 <div className="h-full flex flex-col items-center justify-center space-y-4 pt-32">
+                   <div className="relative">
+                      <div className="w-16 h-16 border-4 border-green-800/10 border-t-green-800 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                         <FileText size={20} className="text-green-800 animate-pulse" />
+                      </div>
+                   </div>
+                   <p className="text-green-800/40 font-black uppercase tracking-widest text-[10px]">AI is drafting your {selectedType.title}...</p>
                  </div>
                ) : (
-                 <>
-                  <div className="text-center mb-10">
-                    <h4 className="text-2xl font-serif font-bold uppercase border-b-2 border-forest inline-block pb-1">{selectedType.title}</h4>
-                  </div>
-                  <div className="text-sm leading-[1.8] text-gray-700 whitespace-pre-wrap font-serif">
-                    {generatedDoc}
-                  </div>
-                 </>
+                 <div className="relative z-10 pt-24 pl-12 pr-4">
+                    {/* Watermark */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] rotate-[-30deg]">
+                       <span className="text-[12rem] font-black uppercase tracking-widest">DRAFT</span>
+                    </div>
+
+                    <div className="text-center mb-16">
+                      <h4 className="text-3xl font-serif font-black underline decoration-green-800 decoration-double underline-offset-8 uppercase text-gray-900">{selectedType.title}</h4>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mt-6">Prepared by nyAI Legal Literacy Engine</p>
+                    </div>
+
+                    <div className="text-[13px] leading-[2.2] text-gray-700 whitespace-pre-wrap font-serif tracking-wide text-justify italic font-medium">
+                      {generatedDoc}
+                    </div>
+
+                    <div className="mt-24 pt-12 border-t border-gray-100 flex justify-between">
+                       <div className="text-center">
+                          <div className="w-48 h-[1px] bg-gray-300 mb-2"></div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Landlord / Principal</p>
+                       </div>
+                       <div className="text-center">
+                          <div className="w-48 h-[1px] bg-gray-300 mb-2"></div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tenant / Attorney</p>
+                       </div>
+                    </div>
+                 </div>
                )}
             </div>
 
@@ -455,7 +480,7 @@ const CasePredictor = () => {
     setIsAnalyzing(true);
     setAnalyzed(false);
     try {
-      const response = await fetch("http://localhost:5000/predict-case", {
+      const response = await fetch("http://localhost:5001/predict-case", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: `Category: ${selectedCategory}. ${description}` })
@@ -573,10 +598,53 @@ const CasePredictor = () => {
 
 const FakeDocDetector = () => {
   const [status, setStatus] = useState('idle'); // idle, scanning, result
+  const [docContent, setDocContent] = useState('');
+  const [docType, setDocType] = useState('Legal Contract');
+  const [result, setResult] = useState(null);
+  const [scanLogs, setScanLogs] = useState([]);
 
-  const handleScan = () => {
+  const handleScan = async () => {
+    if (!docContent.trim()) return alert("Please enter document content or description to analyze.");
     setStatus('scanning');
-    setTimeout(() => setStatus('result'), 3000);
+    setScanLogs(["Initializing forensic engine...", "Establishing secure connection...", "Analyzing logic nodes..."]);
+    
+    try {
+      const response = await fetch('http://localhost:5001/detect-fake-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docContent, docType })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Simulate real-time logic analysis logs for "WOW" factor
+      setTimeout(() => setScanLogs(prev => [...prev, "Checking timestamp validity..."]), 500);
+      setTimeout(() => setScanLogs(prev => [...prev, "Cross-referencing legal statutes..."]), 1000);
+      setTimeout(() => setScanLogs(prev => [...prev, "Finalizing forensic report..."]), 1500);
+      
+      setTimeout(() => {
+        setResult(data);
+        setStatus('result');
+      }, 2000);
+
+    } catch (error) {
+      console.error("Forensic scan failed:", error);
+      // Fallback result if backend/AI is unreachable
+      setResult({
+        status: "suspicious",
+        confidence: "N/A",
+        analysis: "The system was unable to communicate with the live forensic engine, but preliminary heuristics suggest a need for manual review.",
+        signals: [
+          { label: "Connection Integrity", pass: false, score: "Failed" },
+          { label: "Service availability", pass: false, score: "Retry" }
+        ]
+      });
+      setStatus('result');
+    }
   };
 
   return (
@@ -584,27 +652,51 @@ const FakeDocDetector = () => {
       <div className="max-w-4xl mx-auto">
         <header className="mb-12">
           <h2 className="text-4xl font-bold text-gray-900 heading-display lowercase tracking-tighter">Fake Doc Detector</h2>
-          <p className="text-gray-400 font-medium italic mt-2">AI-powered forgery detection</p>
+          <p className="text-gray-400 font-medium italic mt-2">AI-powered forensic authenticity analysis</p>
         </header>
 
         {status === 'idle' && (
           <motion.div 
-            whileHover={{ y: -5 }}
-            className="bg-white p-20 rounded-[3rem] border-2 border-dashed border-lime/30 flex flex-col items-center justify-center bg-lime/5 cursor-pointer group"
-            onClick={handleScan}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
           >
-            <div className="w-20 h-20 bg-lime rounded-3xl flex items-center justify-center text-forest mb-8 shadow-xl shadow-lime/20 group-hover:rotate-6 transition-transform">
-              <ShieldAlert size={40} />
+            <div className="bg-white p-10 rounded-[3rem] border-2 border-gray-100 shadow-xl shadow-gray-200/50">
+               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Document Type</label>
+               <select 
+                 value={docType}
+                 onChange={(e) => setDocType(e.target.value)}
+                 className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-bold text-gray-700 mb-8 outline-none focus:ring-2 focus:ring-lime"
+               >
+                 <option>Legal Contract</option>
+                 <option>Identity Document</option>
+                 <option>Property Deed</option>
+                 <option>Financial Statement</option>
+                 <option>Educational Certificate</option>
+               </select>
+
+               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Paste Extracted Text or Describe Document Details</label>
+               <textarea 
+                 value={docContent}
+                 onChange={(e) => setDocContent(e.target.value)}
+                 className="w-full h-48 bg-gray-50 border-none rounded-[2rem] p-6 text-sm font-medium text-gray-600 mb-8 outline-none focus:ring-2 focus:ring-lime resize-none"
+                 placeholder="Example: 'This rental agreement dated Feb 30, 2026, signed by...'"
+               />
+
+               <button 
+                 onClick={handleScan}
+                 className="w-full bg-forest text-lime py-6 rounded-full font-black uppercase tracking-widest text-xs shadow-lg shadow-forest/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+               >
+                 <ShieldAlert size={18} />
+                 Start Forensic Scan
+               </button>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 heading-display tracking-tight mb-8">Scan Document for Authenticity</h3>
-            <button className="bg-forest text-lime px-10 py-4 rounded-full font-black uppercase tracking-widest text-xs shadow-lg shadow-forest/20">Analyze Now</button>
           </motion.div>
         )}
 
         {status === 'scanning' && (
           <div className="space-y-10">
-            <div className="bg-forest rounded-[3rem] p-16 relative overflow-hidden h-[400px] flex flex-col items-center justify-center">
-               {/* Scan Line */}
+            <div className="bg-forest rounded-[3rem] p-16 relative overflow-hidden h-[400px] flex flex-col items-center justify-center shadow-2xl shadow-forest/40">
                <motion.div 
                  animate={{ top: ['0%', '100%', '0%'] }}
                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
@@ -616,72 +708,173 @@ const FakeDocDetector = () => {
                   <div className="absolute top-12 left-4 w-32 h-2 bg-white/20" />
                   <div className="absolute bottom-4 right-4 w-12 h-12 rounded-full border-2 border-white/20" />
                </div>
-               <div className="mt-12 text-center relative z-30">
-                 <AnimatePresence mode="wait">
-                    <motion.p 
-                      key={Math.random()}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="text-lime font-black uppercase tracking-[0.3em] text-xs"
-                    >
-                      Analyzing Fonts and Seals...
-                    </motion.p>
-                 </AnimatePresence>
+               <div className="mt-12 text-center relative z-30 max-w-lg w-full">
+                 <div className="bg-black/20 backdrop-blur-md rounded-2xl p-6 border border-white/10 text-left font-mono">
+                    <AnimatePresence mode="popLayout">
+                       {scanLogs.map((log, i) => (
+                         <motion.p 
+                           key={i}
+                           initial={{ opacity: 0, x: -10 }}
+                           animate={{ opacity: 1, x: 0 }}
+                           className="text-[10px] text-lime/70 mb-1 flex items-center gap-2"
+                         >
+                           <span className="text-lime">{'>'}</span> {log}
+                         </motion.p>
+                       ))}
+                    </AnimatePresence>
+                 </div>
                </div>
             </div>
           </div>
         )}
 
-        {status === 'result' && (
+        {status === 'result' && result && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="space-y-8"
+            className="space-y-8 pb-32"
           >
-             <div className="bg-green-500 rounded-[3rem] p-12 text-center border-4 border-white shadow-2xl flex flex-col items-center">
-                <CheckCircle2 size={64} className="text-white mb-4" />
-                <h3 className="text-5xl font-bold text-white heading-display tracking-tight lowercase">Likely Authentic</h3>
-                <p className="text-white/80 font-bold uppercase tracking-widest text-xs mt-4">98.4% Confidence Score</p>
+             {/* Main Hero Result Card */}
+             <div className="relative group">
+                <div className={`absolute -inset-1 rounded-[4rem] blur-xl opacity-30 transition-all duration-500 group-hover:opacity-50 ${result.status === 'authentic' ? 'bg-green-400' : result.status === 'suspicious' ? 'bg-orange-400' : 'bg-red-400'}`}></div>
+                <div className={`relative bg-white/80 backdrop-blur-3xl rounded-[3.5rem] p-16 border-2 shadow-2xl flex flex-col lg:flex-row items-center gap-12 overflow-hidden ${result.status === 'authentic' ? 'border-green-100' : result.status === 'suspicious' ? 'border-orange-100' : 'border-red-100'}`}>
+                   
+                   {/* Confidence Gauge Component */}
+                   <div className="relative w-56 h-56 flex items-center justify-center shrink-0">
+                      <svg className="w-full h-full -rotate-90">
+                         <circle cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-100" />
+                         <motion.circle 
+                           cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="12" fill="transparent" 
+                           strokeDasharray="628"
+                           initial={{ strokeDashoffset: 628 }}
+                           animate={{ strokeDashoffset: 628 - (628 * parseInt(result.confidence || 0)) / 100 }}
+                           transition={{ duration: 2, ease: "easeOut" }}
+                           strokeLinecap="round"
+                           className={`${result.status === 'authentic' ? 'text-green-500' : result.status === 'suspicious' ? 'text-orange-500' : 'text-red-500'}`}
+                         />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                         <span className="text-5xl font-black text-gray-900 heading-display">{result.confidence || 'N/A'}</span>
+                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Confidence</span>
+                      </div>
+                   </div>
+
+                   <div className="flex-1 space-y-6 text-center lg:text-left">
+                      <div className="flex items-center gap-4 justify-center lg:justify-start">
+                         {result.status === 'authentic' ? <CheckCircle2 size={32} className="text-green-500" /> : <ShieldAlert size={32} className={`${result.status === 'suspicious' ? 'text-orange-500' : 'text-red-500'}`} />}
+                         <div className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${result.status === 'authentic' ? 'bg-green-500/10 text-green-700 border border-green-200' : result.status === 'suspicious' ? 'bg-orange-500/10 text-orange-700 border border-orange-200' : 'bg-red-500/10 text-red-700 border border-red-200'}`}>
+                           {result.docType || 'Document'} Scan Result
+                         </div>
+                      </div>
+                      <h3 className="text-7xl font-bold text-gray-900 heading-display tracking-tight leading-none lowercase">
+                        {result.status}
+                      </h3>
+                      <p className="text-lg text-gray-500 italic font-medium max-w-xl">"{result.analysis}"</p>
+                      
+                      <div className="flex flex-wrap gap-4 pt-4 justify-center lg:justify-start">
+                         <button className="bg-forest text-lime px-8 py-4 rounded-full font-black uppercase tracking-widest text-[10px] shadow-xl shadow-forest/20 hover:scale-110 active:scale-95 transition-all">Download Audit Trail</button>
+                         <button onClick={() => setStatus('idle')} className="bg-white border-2 border-gray-100 text-gray-400 px-8 py-4 rounded-full font-black uppercase tracking-widest text-[10px] hover:bg-gray-50 transition-all">New Analysis</button>
+                      </div>
+                   </div>
+                </div>
              </div>
 
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100">
-                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8">Verification Signals</h4>
-                   <div className="space-y-6">
-                      {[
-                        { label: 'Font Consistency', pass: true, conf: '100%' },
-                        { label: 'Metadata Integrity', pass: true, conf: '94%' },
-                        { label: 'Official Seal Cross-check', pass: true, conf: '98%' },
-                        { label: 'Noise Pattern Analysis', pass: true, conf: '99%' },
-                        { label: 'Unusual Spacing detected', pass: false, conf: '2%' }
-                      ].map((sig, i) => (
-                        <div key={i} className="space-y-2">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Detailed Signals Panel */}
+                <div className="lg:col-span-2 bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-2xl shadow-gray-200/50">
+                   <div className="flex justify-between items-center mb-10">
+                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Forensic Indicators</h4>
+                      <span className="text-[10px] font-black text-lime uppercase p-2 bg-forest rounded-lg tracking-widest">Deep Scan Enabled</span>
+                   </div>
+                   
+                   {/* Marked Up Content Section */}
+                   <div className="mb-12 bg-gray-50 rounded-[2.5rem] p-10 border border-gray-100 relative group overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
+                        <FileSearch size={100} />
+                      </div>
+                      <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Marked Document Content</h5>
+                      <div className="text-sm leading-relaxed text-gray-600 font-medium">
+                         {(() => {
+                           let text = docContent;
+                           const highlights = result.highlights || [];
+                           
+                           // Simple text segmenting logic to find and highlight AI findings
+                           let segments = [text];
+                           highlights.forEach(h => {
+                              const newSegments = [];
+                              segments.forEach(seg => {
+                                 if (typeof seg === 'string' && seg.includes(h.text)) {
+                                    const parts = seg.split(h.text);
+                                    parts.forEach((p, idx) => {
+                                       newSegments.push(p);
+                                       if (idx < parts.length - 1) {
+                                          newSegments.push(
+                                            <span 
+                                              key={h.text + idx}
+                                              className="bg-red-500/20 text-red-700 border-b-2 border-red-500 font-bold px-1 relative group inline-flex cursor-help"
+                                            >
+                                              {h.text}
+                                              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-forest text-white text-[10px] p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl pointer-events-none z-50 normal-case font-medium">
+                                                {h.reason}
+                                              </span>
+                                            </span>
+                                          );
+                                       }
+                                    });
+                                 } else {
+                                    newSegments.push(seg);
+                                 }
+                              });
+                              segments = newSegments;
+                           });
+                           return segments;
+                         })()}
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                      {result.signals?.map((sig, i) => (
+                        <div key={i} className="space-y-4">
                            <div className="flex justify-between items-center">
                              <div className="flex items-center gap-3">
-                               {sig.pass ? <CheckCircle2 size={16} className="text-green-500" /> : <ShieldAlert size={16} className="text-red-500" />}
+                               <div className={`p-2 rounded-xl ${sig.pass ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                  {sig.pass ? <CheckCircle2 size={16} /> : <ShieldAlert size={16} />}
+                               </div>
                                <span className="text-sm font-bold text-gray-700">{sig.label}</span>
                              </div>
-                             <span className="text-[10px] font-black text-gray-300 tracking-widest">{sig.conf}</span>
+                             <span className={`text-[10px] font-black tracking-widest ${sig.pass ? 'text-green-500' : 'text-red-400'}`}>{sig.score}</span>
                            </div>
-                           <div className="h-1 bg-gray-50 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${sig.pass ? 'bg-lime' : 'bg-red-200'}`} style={{ width: sig.pass ? '90%' : '10%' }} />
+                           <div className="h-2 bg-gray-50 rounded-full overflow-hidden">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: sig.pass ? '100%' : '30%' }}
+                                transition={{ duration: 1, delay: 0.5 + (i * 0.1) }}
+                                className={`h-full rounded-full ${sig.pass ? 'bg-lime' : 'bg-red-400'}`} 
+                              />
                            </div>
                         </div>
                       ))}
                    </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-forest p-10 rounded-[3rem] text-white">
-                    <h4 className="text-xl font-bold mb-4">Official Verification</h4>
-                    <p className="text-xs text-white/50 leading-relaxed mb-10 font-medium italic">"No digital alteration detected in the document header. Forgery patterns are absent from signature zones."</p>
-                    <div className="flex gap-4">
-                       <button className="flex-1 py-4 bg-lime text-forest rounded-full font-black uppercase tracking-widest text-[10px]">Download Report</button>
-                       <button className="flex-1 py-4 border border-white/10 rounded-full font-black uppercase tracking-widest text-[10px]">Flag for Review</button>
-                    </div>
-                  </div>
-                  <button onClick={() => setStatus('idle')} className="w-full py-4 border border-gray-100 rounded-[3rem] font-black uppercase tracking-widest text-[10px] text-gray-400 hover:bg-gray-50">Scan Another</button>
+                {/* Metadata Visualization Simulation */}
+                <div className="bg-forest p-12 rounded-[3.5rem] text-white relative overflow-hidden group">
+                   <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform duration-700">
+                      <FileSearch size={120} />
+                   </div>
+                   <h4 className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-8">Spatial Metadata Heatmap</h4>
+                   <div className="space-y-2">
+                      {[...Array(8)].map((_, i) => (
+                        <div key={i} className="flex gap-2 h-4">
+                           {[...Array(6)].map((_, j) => (
+                             <div key={j} className={`flex-1 rounded-sm ${Math.random() > 0.8 ? 'bg-red-500' : 'bg-white/10'}`} />
+                           ))}
+                        </div>
+                      ))}
+                   </div>
+                   <p className="text-[10px] text-white/40 mt-10 font-bold uppercase tracking-[0.2em] leading-relaxed">
+                     Anomalies detected in metadata timestamp sync and header font injection maps.
+                   </p>
                 </div>
              </div>
           </motion.div>

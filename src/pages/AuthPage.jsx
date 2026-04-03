@@ -9,11 +9,15 @@ import { Link, useNavigate } from 'react-router-dom';
 const AuthPage = ({ setIsLoggedIn }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setIsLoading(true);
+    // Persist email for user-specific features
+    localStorage.setItem("nyai_user_email", email);
+    
     // Simulate auth
     setTimeout(() => {
       setIsLoading(false);
@@ -109,6 +113,8 @@ const AuthPage = ({ setIsLoggedIn }) => {
                   <input 
                      type="email" 
                      placeholder="Email Address" 
+                     value={email}
+                     onChange={(e) => setEmail(e.target.value)}
                      className="w-full bg-gray-50 border border-gray-100 py-6 pl-16 pr-8 rounded-[2rem] text-lg font-medium focus:ring-0 focus:border-lime transition-all focus:bg-white"
                      required 
                   />
