@@ -86,8 +86,38 @@ const cssBlock = `
   }
 `;
 
-export default function LegalLiteracyApp() {
+export default function LegalLiteracyApp({ userEmail = 'guest' }) {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [scrolled, setScrolled] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardStep, setOnboardStep] = useState(0);
+
+  React.useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+
+    const hasSeen = localStorage.getItem('lexarena_onboarded');
+    if (!hasSeen) {
+      setTimeout(() => setShowOnboarding(true), 1200);
+    }
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const finishOnboarding = () => {
+    setShowOnboarding(false);
+    localStorage.setItem('lexarena_onboarded', 'true');
+  };
+
+  const nextStep = () => {
+    if (onboardStep < 3) setOnboardStep(s => s + 1);
+    else finishOnboarding();
+  };
+
+  const restartOnboarding = () => {
+    setOnboardStep(0);
+    setShowOnboarding(true);
+  };
 
   const tabs = [
     { id: 'dashboard', label: 'My Profile', icon: Users },
@@ -96,9 +126,92 @@ export default function LegalLiteracyApp() {
     { id: 'modules',   label: 'Law Scrolls', icon: Database }
   ];
 
+  const onboardingData = [
+    { target: 'dashboard', title: '🪪 Your Dossier', text: 'Track your legal literacy points and professional badges here.' },
+    { target: 'quiz',      title: '🎯 The Arena',   text: 'Generate custom AI quizzes based on your favorite legal topics.' },
+    { target: 'scenarios', title: '📁 Case Files',  text: 'Examine real-world legal scenarios or draft new ones with AI.' },
+    { target: 'modules',   title: '📜 Law Scrolls', text: 'Search any legal concept to generate a custom Law Scroll.' }
+  ];
+
   return (
     <>
       <style>{cssBlock}</style>
+      
+      {/* ─── ONBOARDING OVERLAY ─── */}
+      {showOnboarding && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(13, 59, 46, 0.7)', backdropFilter: 'blur(4px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          animation: 'lexFadeIn 0.4s ease'
+        }}>
+          <div style={{
+            background: 'white', padding: '32px', borderRadius: '24px',
+            maxWidth: '340px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            borderTop: '6px solid #a8e63d', position: 'relative'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>
+              {onboardingData[onboardStep].target === 'dashboard' && '🛡️'}
+              {onboardingData[onboardStep].target === 'quiz' && '⚔️'}
+              {onboardingData[onboardStep].target === 'scenarios' && '⚖️'}
+              {onboardingData[onboardStep].target === 'modules' && '📜'}
+            </div>
+            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: '1.4rem', fontWeight: 800, color: '#1a3a2a', marginBottom: '12px' }}>
+              {onboardingData[onboardStep].title}
+            </h3>
+            <p style={{ fontFamily: "'Outfit', sans-serif", color: '#4b5563', lineHeight: 1.6, marginBottom: '24px' }}>
+              {onboardingData[onboardStep].text}
+            </p>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {[0,1,2,3].map(i => (
+                  <div key={i} style={{ width: i === onboardStep ? '20px' : '8px', height: '8px', background: i === onboardStep ? '#a8e63d' : '#e5e7eb', borderRadius: '4px', transition: 'all 0.3s' }} />
+                ))}
+              </div>
+              <button 
+                onClick={nextStep}
+                style={{
+                  background: '#1a3a2a', color: '#a8e63d', border: 'none',
+                  padding: '10px 24px', borderRadius: '10px', fontWeight: 700,
+                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif"
+                }}
+              >
+                {onboardStep === 3 ? 'Get Started →' : 'Next Tip'}
+              </button>
+            </div>
+            
+            <button 
+              onClick={finishOnboarding}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: '#9ca3af', fontSize: '1.2rem', cursor: 'pointer' }}
+            >✕</button>
+          </div>
+          
+          <div style={{ marginTop: '20px', color: 'white', fontWeight: 600, fontSize: '0.9rem', opacity: 0.8 }}>
+            Step {onboardStep + 1} of 4 • Welcome to LexArena
+          </div>
+        </div>
+      )}
+
+      {/* ─── HELP BUTTON (BOTTOM LEFT) ─── */}
+      <button
+        onClick={restartOnboarding}
+        title="Help & Tutorial"
+        style={{
+          position: 'fixed', bottom: '24px', left: '24px', zIndex: 80,
+          width: '44px', height: '44px', borderRadius: '50%',
+          background: '#1a3a2a', color: '#a8e63d', border: '2px solid #a8e63d',
+          fontSize: '1.4rem', fontWeight: 800, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)', transition: 'transform 0.2s',
+          fontFamily: "'Syne', sans-serif"
+        }}
+        onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+        onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        ?
+      </button>
+
       <div className="lex-layout" style={{ display: 'flex', minHeight: '100vh', paddingTop: '64px', background: '#F5F0E8' }}>
 
         {/* Sidebar Nav */}
@@ -136,10 +249,10 @@ export default function LegalLiteracyApp() {
 
         {/* Scrollable Content */}
         <main key={activeTab} className="lex-content-fade" style={{ flex: 1, padding: '20px', background: '#F5F0E8' }}>
-          {activeTab === 'dashboard' && <ProgressDashboard onGoQuiz={() => setActiveTab('quiz')} />}
-          {activeTab === 'quiz' && <QuizEngine onGoDashboard={() => setActiveTab('dashboard')} />}
-          {activeTab === 'scenarios' && <ScenarioPage onComplete={() => setActiveTab('dashboard')} />}
-          {activeTab === 'modules' && <ModuleList />}
+          {activeTab === 'dashboard' && <ProgressDashboard userEmail={userEmail} onGoQuiz={() => setActiveTab('quiz')} />}
+          {activeTab === 'quiz' && <QuizEngine userEmail={userEmail} onGoDashboard={() => setActiveTab('dashboard')} />}
+          {activeTab === 'scenarios' && <ScenarioPage userEmail={userEmail} onComplete={() => setActiveTab('dashboard')} />}
+          {activeTab === 'modules' && <ModuleList userEmail={userEmail} />}
         </main>
       </div>
     </>
