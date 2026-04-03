@@ -6,7 +6,7 @@ import {
   Search, Gavel, FileCheck, Brain, LayoutDashboard, Plus, Minus,
   Phone, PlusCircle
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const Typewriter = ({ strings, speed = 100, pauseBetween = 2000 }) => {
   const [currentStringIndex, setCurrentStringIndex] = useState(0);
@@ -38,7 +38,7 @@ const Typewriter = ({ strings, speed = 100, pauseBetween = 2000 }) => {
   return <span>{currentText}<span className="animate-pulse border-r-4 border-lime ml-1"></span></span>;
 };
 
-const FeatureCard = ({ icon: Icon, title, desc, to = "/chat", isLoggedIn }) => (
+const FeatureCard = ({ icon: Icon, title, desc, to = "/chat" }) => (
   <motion.div 
     whileHover={{ y: -10 }}
     className="bg-white/5 border border-white/10 p-8 rounded-2xl hover:border-lime/50 transition-all duration-300 group shadow-xl"
@@ -50,14 +50,13 @@ const FeatureCard = ({ icon: Icon, title, desc, to = "/chat", isLoggedIn }) => (
       <h3 className="text-xl font-bold text-white">{title}</h3>
     </div>
     <p className="text-offwhite/60 leading-relaxed text-sm mb-6">{desc}</p>
-    <Link to={isLoggedIn ? to : "/login"} className="flex items-center gap-2 text-lime font-bold text-sm hover:gap-3 transition-all">
+    <Link to={to} className="flex items-center gap-2 text-lime font-bold text-sm hover:gap-3 transition-all">
       Launch Tool <ArrowRight size={16} />
     </Link>
   </motion.div>
 );
 
-const LandingPage = ({ isLoggedIn }) => {
-  const navigate = useNavigate();
+const LandingPage = () => {
   const [activeFaq, setActiveFaq] = useState(0);
 
   const typewriterStrings = [
@@ -122,13 +121,10 @@ const LandingPage = ({ isLoggedIn }) => {
             </p>
             
             <div className="flex flex-wrap gap-4">
-              <Link to={isLoggedIn ? "/chat" : "/login"} className="btn-primary flex items-center gap-2">
+              <Link to="/chat" className="btn-primary flex items-center gap-2">
                 Ask nyAI Now <ArrowRight size={20} />
               </Link>
-              <button className="btn-ghost" onClick={() => {
-                const target = document.getElementById('features');
-                if (target) target.scrollIntoView({ behavior: 'smooth' });
-              }}>See How It Works</button>
+              <button className="btn-ghost">See How It Works</button>
             </div>
 
             <div className="mt-16 grid grid-cols-3 gap-6">
@@ -310,42 +306,36 @@ const LandingPage = ({ isLoggedIn }) => {
              title="AI Legal Chatbot" 
              desc="Ask anything about Indian law, rights, or the constitution in your own language. Get instant clarity with citations." 
              to="/chat"
-             isLoggedIn={isLoggedIn}
           />
           <FeatureCard 
              icon={Search} 
              title="Legal Glossary" 
              desc="Decode complex legal jargon into plain, everyday English. Never be confused by 'legalese' again." 
              to="/chat"
-             isLoggedIn={isLoggedIn}
           />
           <FeatureCard 
              icon={Phone} 
              title="Emergency SOS" 
              desc="Connect to a verified lawyer instantly in crisis situations. One click away from expert legal help." 
              to="/lawyers"
-             isLoggedIn={isLoggedIn}
           />
           <FeatureCard 
              icon={FileCheck} 
              title="Document Analyzer" 
              desc="Upload any contract or legal notice. AI highlights risky clauses and hidden terms in seconds." 
              to="/documents"
-             isLoggedIn={isLoggedIn}
           />
           <FeatureCard 
              icon={PlusCircle} 
              title="Doc Generator" 
              desc="Create rental agreements, rental notices, wills, and contracts automatically based on your state laws." 
              to="/documents"
-             isLoggedIn={isLoggedIn}
           />
           <FeatureCard 
              icon={Brain} 
              title="Outcome Predictor" 
              desc="AI analyzes past case data from Indian courts to predict potential outcomes for your legal dispute." 
              to="/chat"
-             isLoggedIn={isLoggedIn}
           />
         </div>
 
@@ -385,7 +375,7 @@ const LandingPage = ({ isLoggedIn }) => {
                ))}
             </ul>
 
-            <Link to={isLoggedIn ? "/lawyers" : "/login"} className="btn-primary">Connect with an Advocate</Link>
+            <Link to="/lawyers" className="btn-primary">Connect with an Advocate</Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -408,10 +398,7 @@ const LandingPage = ({ isLoggedIn }) => {
                     </div>
                     <p className="text-white/40 text-xs font-bold font-mono tracking-widest">4.9 (420+ Reviews)</p>
                  </div>
-                 <button 
-                   onClick={() => navigate(isLoggedIn ? "/lawyers" : "/login")}
-                   className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-offwhite font-bold hover:bg-white/10 transition-colors"
-                 >
+                 <button className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-offwhite font-bold hover:bg-white/10 transition-colors">
                    Book Consultation
                  </button>
                </motion.div>

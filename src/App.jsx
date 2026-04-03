@@ -355,8 +355,18 @@ const ProtectedRoute = ({ children, isLoggedIn }) => {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Load user from localStorage
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('nyai_user_email');
+    if (savedEmail) {
+      setIsLoggedIn(true);
+      setUserEmail(savedEmail);
+    }
+  }, []);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -364,6 +374,8 @@ function App() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setUserEmail(null);
+    localStorage.removeItem('nyai_user_email');
     navigate('/');
   };
 
@@ -374,7 +386,7 @@ function App() {
     <div className="min-h-screen bg-offwhite selection:bg-lime selection:text-forest">
       {!isAuthPage && <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} />}
       <Routes>
-        <Route path="/" element={<LandingPage isLoggedIn={isLoggedIn} />} />
+        <Route path="/" element={<LandingPage />} />
         <Route 
           path="/chat" 
           element={
@@ -414,7 +426,7 @@ function App() {
           path="/learn" 
           element={
             <ProtectedRoute isLoggedIn={isLoggedIn}>
-              <LegalLiteracyApp />
+              <LegalLiteracyApp userEmail={userEmail} />
             </ProtectedRoute>
           } 
         />

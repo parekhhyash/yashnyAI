@@ -47,10 +47,15 @@ const BADGE_META = {
 };
 const ALL_BADGES = Object.keys(BADGE_META);
 
-export default function ProgressDashboard({ onGoQuiz }) {
-  const { points, level, badges, accuracy, completedScenarios, loading } = useProgress('guest');
+export default function ProgressDashboard({ userEmail, onGoQuiz }) {
+  const { points, level, badges, accuracy, completedScenarios, loading, refetch } = useProgress(userEmail);
   const animPts = useCountUp(points);
   const animAcc = useCountUp(accuracy);
+
+  // Ensure stats are fresh when returning to dashboard
+  useEffect(() => {
+    refetch();
+  }, []);
 
   if (loading) return (
     <div style={{ padding: '80px 20px', textAlign: 'center', fontFamily: "'DM Sans', sans-serif", color: '#6b7280' }}>
@@ -111,37 +116,38 @@ export default function ProgressDashboard({ onGoQuiz }) {
         </div>
 
         {/* ═══ QUICK ACTIONS ═══ */}
-        {completedScenarios.length === 0 && (
-          <div style={{
-            background: 'linear-gradient(135deg, #1a3a2a 0%, #2d5a42 100%)',
-            borderRadius: '20px', padding: '32px 40px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: '24px', marginBottom: '32px',
-            animation: 'lexCardIn 0.4s ease 300ms both',
-            boxShadow: '0 12px 30px rgba(26, 58, 42, 0.15)'
-          }}>
-            <div>
-              <div style={{ color: '#a8e63d', fontWeight: 600, fontSize: '1.5rem', marginBottom: '6px', fontFamily: "'Instrument Serif', serif" }}>
-                Ready to begin?
-              </div>
-              <div style={{ color: 'rgba(245,240,232,0.8)', fontSize: '0.95rem', maxWidth: '400px' }}>
-                Enter the Arena to test your legal knowledge and earn your first badge.
-              </div>
+        <div style={{
+          background: 'linear-gradient(135deg, #1a3a2a 0%, #2d5a42 100%)',
+          borderRadius: '20px', padding: '32px 40px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: '24px', marginBottom: '32px',
+          animation: 'lexCardIn 0.4s ease 300ms both',
+          boxShadow: '0 12px 30px rgba(26, 58, 42, 0.15)'
+        }}>
+          <div style={{ flex: 1, minWidth: '300px' }}>
+            <div style={{ color: '#a8e63d', fontWeight: 600, fontSize: '1.5rem', marginBottom: '6px', fontFamily: "'Instrument Serif', serif" }}>
+              {completedScenarios.length === 0 ? 'Ready to begin?' : 'Continue Training'}
             </div>
-            <button onClick={onGoQuiz} style={{
-              background: '#a8e63d', color: '#0D3B2E', padding: '14px 32px',
-              borderRadius: '12px', fontWeight: 700, fontSize: '0.95rem',
-              cursor: 'pointer', whiteSpace: 'nowrap', border: 'none',
-              fontFamily: "'DM Sans', sans-serif",
-              transition: 'transform 0.2s, box-shadow 0.2s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(168,230,61,0.4)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-            >
-              Start Quiz
-            </button>
+            <div style={{ color: 'rgba(245,240,232,0.8)', fontSize: '0.95rem', maxWidth: '480px' }}>
+              {completedScenarios.length === 0 
+                ? 'Enter the Arena to test your legal knowledge and earn your first badge.'
+                : 'Re-enter the Arena to sharpen your legal skills and earn more points.'}
+            </div>
           </div>
-        )}
+          <button onClick={onGoQuiz} style={{
+            background: '#a8e63d', color: '#0D3B2E', padding: '14px 32px',
+            borderRadius: '12px', fontWeight: 700, fontSize: '0.95rem',
+            cursor: 'pointer', whiteSpace: 'nowrap', border: 'none',
+            fontFamily: "'DM Sans', sans-serif",
+            transition: 'all 0.2s ease-in-out',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(168,230,61,0.4)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            {completedScenarios.length === 0 ? 'Start Quiz' : 'Re-enter Arena'}
+          </button>
+        </div>
+
 
         {/* ═══ LEGAL OATH ═══ */}
         <div style={{

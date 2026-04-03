@@ -1,8 +1,15 @@
 // server.js - Express server for Legal Literacy Engine feature
 // Runs on port 5000 and provides in-memory state for scenarios and progress
 
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const USERS_FILE = path.join(__dirname, 'users.json');
 
 const app = express();
 app.use(cors());
@@ -10,13 +17,48 @@ app.use(express.json());
 
 const PORT = 5000;
 
-// In-memory data store for user progress
-const users = {};
+// ─── AI PROVIDER CONFIG ───
+const getProviders = () => ({
+  OLLAMA: {
+    url: "https://ollama.com/v1/chat/completions",
+    model: "ministral-3:8b", // Efficient cloud model
+    key: process.env.OLLAMA_API_KEY
+  },
+  ANTHROPIC: {
+    url: "https://api.anthropic.com/v1/messages",
+    model: "claude-3-haiku-20240307",
+    key: process.env.ANTHROPIC_API_KEY
+  },
+  OPENAI: {
+    url: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4o-mini",
+    key: process.env.OPENAI_API_KEY
+  }
+});
+
+// Load users from disk or init empty
+let users = {};
+try {
+  if (fs.existsSync(USERS_FILE)) {
+    users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    console.log(`Loaded ${Object.keys(users).length} users from disk.`);
+  }
+} catch (e) {
+  console.error("Failed to load users.json:", e.message);
+  users = {};
+}
+
+// Helper to save users to disk
+const saveToDisk = () => {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  } catch (e) {
+    console.error("Failed to save users.json:", e.message);
+  }
+};
 
 // Static mock categories and scenarios
-// AI HOOK: Replace static scenarios array with call to OpenAI/Claude API
-// to generate dynamic scenarios based on user's legal topic of interest
-const scenarios = [
+let scenarios = [
   {
     id: 1,
     category: "Consumer Rights",
@@ -89,36 +131,153 @@ const initUser = (userId) => {
       totalAnswers: 0,
       badges: []
     };
+    saveToDisk();
   }
 };
+
+// ─── SMART AI DISPATCHER ───
+
+async function callOllama(prompt, maxTokens, config) {
+  const resp = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.key}`
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: maxTokens,
+      stream: false
+    })
+  });
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`Ollama Response Error (${resp.status}):`, errorText);
+    throw new Error(`Ollama Error: ${errorText}`);
+  }
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+async function callAnthropic(prompt, maxTokens, config) {
+  const resp = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": config.key,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`Anthropic Response Error (${resp.status}):`, errorText);
+    throw new Error(`Anthropic Error: ${errorText}`);
+  }
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+async function callOpenAI(prompt, maxTokens, config) {
+  const resp = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.key}`
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: maxTokens
+    })
+  });
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`OpenAI Response Error (${resp.status}):`, errorText);
+    throw new Error(`OpenAI Error: ${errorText}`);
+  }
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ─── SMART AI DISPATCHER HELPER ───
+
+async function handleAIRequest(prompt, maxTokens = 1000) {
+  const PROVIDERS = getProviders();
+  let result = null;
+  let engine = "None";
+
+  // 1. Try Ollama (Primary Free)
+  if (PROVIDERS.OLLAMA.key) {
+    try {
+      result = await callOllama(prompt, maxTokens, PROVIDERS.OLLAMA);
+      engine = "Ollama Cloud";
+    } catch (e) { console.warn("Ollama fallback triggered:", e.message); }
+  }
+
+  // 2. Try Anthropic (Legal Premium)
+  if (!result && PROVIDERS.ANTHROPIC.key) {
+    try {
+      result = await callAnthropic(prompt, maxTokens, PROVIDERS.ANTHROPIC);
+      engine = "Anthropic Claude";
+    } catch (e) { console.warn("Anthropic fallback triggered:", e.message); }
+  }
+
+  // 3. Try OpenAI (Fast Alternative)
+  if (!result && PROVIDERS.OPENAI.key) {
+    try {
+      result = await callOpenAI(prompt, maxTokens, PROVIDERS.OPENAI);
+      engine = "OpenAI GPT-4";
+    } catch (e) { console.warn("Final fallback failed:", e.message); }
+  }
+
+  if (!result) throw new Error("No AI provider keys available or services down.");
+  return { text: result, engine };
+}
+
+app.post('/ai/ask', async (req, res) => {
+  const { prompt, maxTokens = 1000 } = req.body;
+  try {
+    const { text, engine } = await handleAIRequest(prompt, maxTokens);
+    res.json({ content: [{ text }], engine });
+  } catch (err) {
+    console.error("Dispatcher Error:", err);
+    res.status(500).json({ error: "Failed to communicate with AI engines." });
+  }
+});
+
+app.post('/ai/generate-scenarios', async (req, res) => {
+  const prompt = `Generate 3 unique legal scenarios for India. Return ONLY a valid JSON array. 
+Fields: id (starting from ${scenarios.length + 1}), category, situation, question, options, correctOption, explanation, difficulty.`;
+
+  try {
+    const { text, engine } = await handleAIRequest(prompt, 2000);
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const newScenarios = JSON.parse(cleaned);
+    scenarios = [...scenarios, ...newScenarios];
+    res.json({ message: `Success. Created ${newScenarios.length} cases.`, engine, total: scenarios.length });
+  } catch (err) {
+    console.error("Generation Error:", err);
+    res.status(500).json({ error: "Failed to generate or parse AI scenarios." });
+  }
+});
+
+// ─── DATA ROUTES ───
 
 app.get('/scenarios', (req, res) => {
   res.json(scenarios);
 });
 
-app.post('/submit-answer', (req, res) => {
-  const { userId = 'guest', scenarioId, selectedOption } = req.body;
-  initUser(userId);
-  
-  const scenario = scenarios.find(s => s.id === scenarioId);
-  if (!scenario) return res.status(404).json({ error: "Scenario not found" });
-
-  const isCorrect = scenario.correctOption.charAt(0) === selectedOption.charAt(0);
-  const pointsEarned = isCorrect ? 10 : 0;
-
-  res.json({
-    isCorrect,
-    explanation: scenario.explanation,
-    pointsEarned
-  });
-});
-
 app.post('/progress', (req, res) => {
   const { userId = 'guest', scenarioId, isCorrect } = req.body;
   initUser(userId);
-  
   const user = users[userId];
-  
+
   if (!user.completedScenarios.includes(scenarioId)) {
     user.completedScenarios.push(scenarioId);
     user.totalAnswers += 1;
@@ -126,30 +285,33 @@ app.post('/progress', (req, res) => {
       user.correctAnswers += 1;
       user.totalPoints += 10;
     }
-
-    // Badge Gamification Logic
     if (user.completedScenarios.length === 1 && !user.badges.includes("First Step")) {
       user.badges.push("First Step");
     }
     if (user.correctAnswers >= 5 && !user.badges.includes("Sharp Mind")) {
       user.badges.push("Sharp Mind");
     }
-    if (user.completedScenarios.length >= scenarios.length && user.correctAnswers >= scenarios.length && !user.badges.includes("Legal Eagle")) {
+    if (user.completedScenarios.length >= 10 && !user.badges.includes("Legal Eagle")) {
       user.badges.push("Legal Eagle");
     }
+    saveToDisk();
   }
 
-  // Calculate generic level
   let level = "Beginner";
   if (user.totalPoints >= 51 && user.totalPoints <= 150) level = "Aware";
   if (user.totalPoints > 150) level = "Advanced";
+
+  const providers = getProviders();
+  const engine = providers.OLLAMA.key ? "Ollama Cloud" : (providers.OPENAI.key ? "OpenAI" : "None");
 
   res.json({
     totalPoints: user.totalPoints,
     level,
     badges: user.badges,
     completedScenarios: user.completedScenarios,
-    accuracy: user.totalAnswers > 0 ? Math.round((user.correctAnswers / user.totalAnswers) * 100) : 0
+    accuracy: user.totalAnswers > 0 ? Math.round((user.correctAnswers / user.totalAnswers) * 100) : 0,
+    totalCasesClosed: user.completedScenarios.length,
+    activeEngine: engine
   });
 });
 
@@ -157,17 +319,21 @@ app.get('/progress/:userId', (req, res) => {
   const { userId } = req.params;
   initUser(userId);
   const user = users[userId];
-
   let level = "Beginner";
   if (user.totalPoints >= 51 && user.totalPoints <= 150) level = "Aware";
   if (user.totalPoints > 150) level = "Advanced";
+
+  const providers = getProviders();
+  const engine = providers.OLLAMA.key ? "Ollama Cloud" : (providers.OPENAI.key ? "OpenAI" : "None");
 
   res.json({
     totalPoints: user.totalPoints,
     level,
     badges: user.badges,
     completedScenarios: user.completedScenarios,
-    accuracy: user.totalAnswers > 0 ? Math.round((user.correctAnswers / user.totalAnswers) * 100) : 0
+    accuracy: user.totalAnswers > 0 ? Math.round((user.correctAnswers / user.totalAnswers) * 100) : 0,
+    totalCasesClosed: user.completedScenarios.length,
+    activeEngine: engine
   });
 });
 
