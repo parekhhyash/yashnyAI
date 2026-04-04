@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.join(__dirname, 'users.json');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*" })); // Allow all for development to fix connection issues
 app.use(express.json());
 
 const PORT = 5001;
@@ -122,18 +122,78 @@ let scenarios = [
 ];
 
 // Helper to init user
-const initUser = (userId) => {
-  if (!users[userId]) {
-    users[userId] = {
+const initUser = (email, name = "User") => {
+  if (!users[email]) {
+    users[email] = {
+      name: name,
       totalPoints: 0,
       completedScenarios: [],
       correctAnswers: 0,
       totalAnswers: 0,
-      badges: []
+      badges: [],
+      joinedAt: new Date().toISOString()
     };
     saveToDisk();
   }
 };
+
+// ─── AUTH ENDPOINTS ───
+
+app.post('/api/auth/signup', (req, res) => {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name) return res.status(400).json({ error: "Missing fields" });
+  
+  if (users[email]) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  users[email] = {
+    name,
+    password, // In a real app, hash this!
+    totalPoints: 0,
+    completedScenarios: [],
+    correctAnswers: 0,
+    totalAnswers: 0,
+    badges: [],
+    joinedAt: new Date().toISOString()
+  };
+  
+  saveToDisk();
+  res.json({ success: true, user: { email, name: users[email].name } });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const user = users[email];
+  
+  if (!user || user.password !== password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  res.json({ success: true, user: { email, name: user.name } });
+});
+
+app.post('/api/auth/google-login', (req, res) => {
+  const { email, name, picture } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  if (!users[email]) {
+    users[email] = {
+      name: name || "Google User",
+      picture: picture,
+      googleUser: true,
+      totalPoints: 0,
+      completedScenarios: [],
+      correctAnswers: 0,
+      totalAnswers: 0,
+      badges: [],
+      joinedAt: new Date().toISOString()
+    };
+    saveToDisk();
+  }
+
+  res.json({ success: true, user: { email, name: users[email].name, picture: users[email].picture } });
+});
 
 // ─── SMART AI DISPATCHER ───
 
@@ -506,27 +566,50 @@ DEPONENT: ______________`
   };
 
   try {
-    const prompt = `Draft a comprehensive, professional, and long Indian ${type} Legal Document including all necessary clauses, signatures, and formal formatting. 
+    const prompt = `Draft a high-quality, professional, and long Indian ${type} Legal Document. 
+    Use a 11-month lease format for Rent Agreements. Include proper clauses for: Parties, Term, Rent, Deposit, Maintenance, Notice Period, and Signatures. 
     Details: ${JSON.stringify(details)}
-    Ensure it is at least 600 words long and uses formal legal English. Output ONLY the draft content. DO NOT REFUSE.`;
+    Output in a professional legal style, NOT a JSON object. Ensure it is at least 600 words long.`;
 
     const fetchRes = await fetch('https://text.pollinations.ai/', {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         messages: [
-          {role: "system", content: "You are a professional Senior Legal Draftsman specializing in Indian law. You draft detailed, binding contracts and documents. You never include apologies or disclaimers."},
+          {role: "system", content: "You are an expert Indian Solicitor. You draft real-world, binding legal documents. You only return the document text itself, no explanations, no JSON, no reasoning."},
           {role: "user", content: prompt}
         ],
-        model: "openai"
+        model: "openai",
+        jsonMode: false
       })
     });
     
-    const textOutput = (await fetchRes.text()).trim();
+    let rawOutput = (await fetchRes.text()).trim();
+    let textOutput = rawOutput;
+
+    // Try to parse if it returned JSON instead of raw text
+    try {
+      const parsed = JSON.parse(rawOutput);
+      if (parsed.content) textOutput = parsed.content;
+      else if (parsed.choices?.[0]?.message?.content) textOutput = parsed.choices[0].message.content;
+    } catch(e) {
+      // It's already raw text (or broken JSON), keep as is
+    }
     
+    // Clean up markdown/JSON markers if they appear
+    textOutput = textOutput.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    // Secondary cleanup for role/reasoning prefix stringify artifacts
+    if (textOutput.startsWith('{') && textOutput.includes('"content":')) {
+       try {
+          const inner = JSON.parse(textOutput);
+          textOutput = inner.content || textOutput;
+       } catch(e) {}
+    }
+
     // Hardened check for AI refusals or low-quality content
-    const refusals = ["sorry", "can't help", "policy", "cannot fulfill", "as an ai", "language model", "confidential", "illegal"];
-    const isUseless = refusals.some(word => textOutput.toLowerCase().includes(word)) || textOutput.length < 350;
+    const refusals = ["sorry", "can't help", "policy", "cannot fulfill", "as an ai", "language model"];
+    const isUseless = refusals.some(word => textOutput.toLowerCase().includes(word)) || textOutput.length < 300;
 
     if (isUseless) {
        console.log(`[AI REFUSAL/QUALITY CHECK FAILED] for ${type}. Switching to Internal Master Template.`);
@@ -608,6 +691,6 @@ Response Format (JSON ONLY):
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend server running on http://127.0.0.1:${PORT}`);
 });

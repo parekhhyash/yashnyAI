@@ -353,6 +353,8 @@ const ProtectedRoute = ({ children, isLoggedIn }) => {
   return children;
 };
 
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
@@ -382,8 +384,12 @@ function App() {
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const isChatPage = location.pathname === '/chat';
 
+  // Replace with your actual Google Client ID from Google Cloud Console
+  const GOOGLE_CLIENT_ID = "667036837348-1gvggokp2tcd07lsa4hqc4tnu6kobc0a.apps.googleusercontent.com";
+
   return (
-    <div className="min-h-screen bg-offwhite selection:bg-lime selection:text-forest">
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <div className="min-h-screen bg-offwhite selection:bg-lime selection:text-forest">
       {!isAuthPage && <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} />}
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -420,8 +426,8 @@ function App() {
           } 
         />
         <Route path="/about" element={<AboutPage />} />
-        <Route path="/login" element={<AuthPage setIsLoggedIn={setIsLoggedIn} />} />
-        <Route path="/signup" element={<AuthPage setIsLoggedIn={setIsLoggedIn} />} />
+        <Route path="/login" element={isLoggedIn ? <Navigate to="/chat" /> : <AuthPage setIsLoggedIn={setIsLoggedIn} setUserEmail={setUserEmail} />} />
+        <Route path="/signup" element={isLoggedIn ? <Navigate to="/chat" /> : <AuthPage setIsLoggedIn={setIsLoggedIn} setUserEmail={setUserEmail} />} />
         <Route 
           path="/learn" 
           element={
@@ -433,7 +439,8 @@ function App() {
       </Routes>
       {!(isAuthPage || isChatPage) && <Footer />}
       {!(isAuthPage || isChatPage) && <SOSButton />}
-    </div>
+      </div>
+    </GoogleOAuthProvider>
   );
 }
 
