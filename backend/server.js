@@ -15,7 +15,7 @@ const app = express();
 app.use(cors({ origin: "*" })); // Allow all for development to fix connection issues
 app.use(express.json());
 
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 // ─── AI PROVIDER CONFIG ───
 const getProviders = () => ({

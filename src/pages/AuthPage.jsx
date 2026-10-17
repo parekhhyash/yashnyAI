@@ -7,6 +7,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 
 import { GoogleLogin } from '@react-oauth/google';
+import { API_BASE } from '../config/api';
 import {jwtDecode} from 'jwt-decode';
 
 const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
@@ -27,7 +28,7 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
       const payload = isLogin ? { email, password } : { email, password, name };
       
-      const response = await fetch(`http://127.0.0.1:5001${endpoint}`, {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -58,7 +59,7 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
       const decoded = jwtDecode(credentialResponse.credential);
       console.log("Decoded Google User:", decoded);
 
-      const response = await fetch('http://127.0.0.1:5001/api/auth/google-login', {
+      const response = await fetch(`${API_BASE}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

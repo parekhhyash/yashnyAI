@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import QuestionCard from './QuestionCard';
 import { askClaude, parseJSONResponse } from '../utils/aiService';
 
-const API_BASE = "http://localhost:5001";
+import { API_BASE } from "../../../config/api";
 
 const css = `
   @keyframes lexFadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }

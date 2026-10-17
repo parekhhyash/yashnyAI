@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 
-const API_BASE = "http://localhost:5001";
+import { API_BASE } from "../../../config/api";
 
 export const useProgress = (userId = 'guest') => {
   const [data, setData] = useState({

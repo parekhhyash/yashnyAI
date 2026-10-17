@@ -2,7 +2,8 @@
 // Centralizes all AI calls by proxying through the backend server
 // This fixes CORS and API Key exposure issues
 
-const BACKEND_AI_URL = "http://localhost:5001/ai/ask";
+import { API_BASE } from "../../../config/api";
+const BACKEND_AI_URL = `${API_BASE}/ai/ask`;
 
 /**
  * Send a prompt to the backend AI proxy and return the text response.

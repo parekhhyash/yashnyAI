@@ -11,6 +11,7 @@ import {
 import { Link } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { useTranslation } from 'react-i18next';
+import { API_BASE } from '../config/api';
 
 // --- Sub-components for Tools ---
 
@@ -161,7 +162,7 @@ const LegalAssistant = () => {
     setIsTyping(true);
 
     try {
-      const response = await fetch("http://localhost:5001/api/legal-chat", {
+      const response = await fetch(`${API_BASE}/api/legal-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -464,7 +465,7 @@ const DocumentGenerator = () => {
     setIsGenerating(true);
     setStep(3);
     try {
-      const response = await fetch("http://localhost:5001/generate-document", {
+      const response = await fetch(`${API_BASE}/generate-document`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: selectedType.title, details: formData })
@@ -661,7 +662,7 @@ const CasePredictor = () => {
     setIsAnalyzing(true);
     setAnalyzed(false);
     try {
-      const response = await fetch("http://localhost:5001/predict-case", {
+      const response = await fetch(`${API_BASE}/predict-case`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: `Category: ${selectedCategory}. ${description}` })
@@ -790,7 +791,7 @@ const FakeDocDetector = () => {
     setScanLogs(["Initializing forensic engine...", "Establishing secure connection...", "Analyzing logic nodes..."]);
     
     try {
-      const response = await fetch('http://localhost:5001/detect-fake-doc', {
+      const response = await fetch(`${API_BASE}/detect-fake-doc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docContent, docType })
