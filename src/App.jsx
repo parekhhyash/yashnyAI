@@ -11,7 +11,6 @@ import LawyersPage from './pages/LawyersPage';
 import DashboardPage from './pages/DashboardPage';
 import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
-import LegalLiteracyApp from './features/legal-literacy';
 
 // Navbar Component
 const Navbar = ({ isLoggedIn, onLogout }) => {
@@ -23,13 +22,12 @@ const Navbar = ({ isLoggedIn, onLogout }) => {
   const { t, i18n } = useTranslation();
   const isAboutPage = location.pathname === '/about';
   const isLawyersPage = location.pathname === '/lawyers';
-  const isLearnPage = location.pathname === '/learn';
   const isChatPage = location.pathname === '/chat';
 
   // Landing routes (Public)
   const isLandingSection = ['/', '/about', '/login', '/signup'].includes(location.pathname);
   // Product routes (Authenticated)
-  const isProductSection = ['/chat', '/lawyers', '/learn', '/dashboard', '/documents'].includes(location.pathname);
+  const isProductSection = ['/chat', '/lawyers', '/dashboard', '/documents'].includes(location.pathname);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -59,7 +57,6 @@ const Navbar = ({ isLoggedIn, onLogout }) => {
   const productLinks = [
     { name: t('nav.aiTools'), path: '/chat', key: 'AI Tools' },
     { name: t('nav.lawyers'), path: '/lawyers', key: 'Lawyers' },
-    { name: t('nav.lexArena'), path: '/learn', key: 'LexArena' },
     { name: t('nav.dashboard'), path: '/dashboard', key: 'Dashboard' },
   ];
 
@@ -231,6 +228,7 @@ const Navbar = ({ isLoggedIn, onLogout }) => {
 
 // SOS Button Component
 const SOSButton = () => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -480,14 +478,6 @@ function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/login" element={isLoggedIn ? <Navigate to="/chat" /> : <AuthPage setIsLoggedIn={setIsLoggedIn} setUserEmail={setUserEmail} />} />
         <Route path="/signup" element={isLoggedIn ? <Navigate to="/chat" /> : <AuthPage setIsLoggedIn={setIsLoggedIn} setUserEmail={setUserEmail} />} />
-        <Route 
-          path="/learn" 
-          element={
-            <ProtectedRoute isLoggedIn={isLoggedIn}>
-              <LegalLiteracyApp userEmail={userEmail} />
-            </ProtectedRoute>
-          } 
-        />
       </Routes>
       {!(isAuthPage || isChatPage) && <Footer />}
       {!(isAuthPage || isChatPage) && <SOSButton />}
