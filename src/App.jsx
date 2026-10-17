@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Scale, Bell, Globe, ArrowRight, MessageCircle, FileText, Users, LayoutDashboard, CheckCircle2, AlertTriangle, ShieldCheck, Download, ExternalLink, Play, Search, PlusCircle, History, Settings, LogOut, Phone, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGES } from './i18n';
+import { supabase } from './config/supabase';
 import LandingPage from './pages/LandingPage';
 import ChatPage from './pages/ChatPage';
 import DocumentsPage from './pages/DocumentsPage';
@@ -403,42 +404,48 @@ const ProtectedRoute = ({ children, isLoggedIn }) => {
   return children;
 };
 
-import { GoogleOAuthProvider } from '@react-oauth/google';
-
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Load user from localStorage
+  const [authReady, setAuthReady] = useState(!supabase);
+
+  // Restore the Supabase session and keep login state in sync (login, logout, token refresh)
   useEffect(() => {
-    const savedEmail = localStorage.getItem('nyai_user_email');
-    if (savedEmail) {
-      setIsLoggedIn(true);
-      setUserEmail(savedEmail);
-    }
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setIsLoggedIn(Boolean(data.session));
+      setUserEmail(data.session?.user?.email ?? null);
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(Boolean(session));
+      setUserEmail(session?.user?.email ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (supabase) await supabase.auth.signOut();
     setIsLoggedIn(false);
     setUserEmail(null);
-    localStorage.removeItem('nyai_user_email');
     navigate('/');
   };
 
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const isChatPage = location.pathname === '/chat';
 
-  // Replace with your actual Google Client ID from Google Cloud Console
-  const GOOGLE_CLIENT_ID = "667036837348-1gvggokp2tcd07lsa4hqc4tnu6kobc0a.apps.googleusercontent.com";
+  // Avoid flashing the login redirect before the stored session is restored
+  if (!authReady) return null;
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <>
       <div className="min-h-screen bg-offwhite selection:bg-lime selection:text-forest">
       {!isAuthPage && <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} />}
       <Routes>
@@ -482,7 +489,7 @@ function App() {
       {!(isAuthPage || isChatPage) && <Footer />}
       {!(isAuthPage || isChatPage) && <SOSButton />}
       </div>
-    </GoogleOAuthProvider>
+    </>
   );
 }
 

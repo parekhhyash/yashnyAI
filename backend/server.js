@@ -1,14 +1,9 @@
-// server.js - Express API for nyAI (legal chat, document tools, auth, LLM gateway)
+// server.js - Express API for nyAI (legal chat, document tools, LLM gateway)
 
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USERS_FILE = path.join(__dirname, 'users.json');
+import { chatCompletion, parseJSONLoose } from './llm.js';
 
 const app = express();
 app.use(cors({ origin: "*" })); // Allow all for development to fix connection issues
@@ -16,215 +11,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5001;
 
-// ─── AI PROVIDER CONFIG ───
-const getProviders = () => ({
-  OLLAMA: {
-    url: "https://ollama.com/v1/chat/completions",
-    model: "ministral-3:8b", // Efficient cloud model
-    key: process.env.OLLAMA_API_KEY
-  },
-  ANTHROPIC: {
-    url: "https://api.anthropic.com/v1/messages",
-    model: "claude-3-haiku-20240307",
-    key: process.env.ANTHROPIC_API_KEY
-  },
-  OPENAI: {
-    url: "https://api.openai.com/v1/chat/completions",
-    model: "gpt-4o-mini",
-    key: process.env.OPENAI_API_KEY
-  }
-});
+// ─── HEALTH ───
+app.get('/health', (req, res) => res.json({ ok: true }));
 
-// Load users from disk or init empty
-let users = {};
-try {
-  if (fs.existsSync(USERS_FILE)) {
-    users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    console.log(`Loaded ${Object.keys(users).length} users from disk.`);
-  }
-} catch (e) {
-  console.error("Failed to load users.json:", e.message);
-  users = {};
-}
-
-// Helper to save users to disk
-const saveToDisk = () => {
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-  } catch (e) {
-    console.error("Failed to save users.json:", e.message);
-  }
-};
-
-// ─── AUTH ENDPOINTS ───
-
-app.post('/api/auth/signup', (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email || !password || !name) return res.status(400).json({ error: "Missing fields" });
-  
-  if (users[email]) {
-    return res.status(400).json({ error: "User already exists" });
-  }
-
-  users[email] = {
-    name,
-    password, // In a real app, hash this!
-    joinedAt: new Date().toISOString()
-  };
-  
-  saveToDisk();
-  res.json({ success: true, user: { email, name: users[email].name } });
-});
-
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  const user = users[email];
-  
-  if (!user || user.password !== password) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  res.json({ success: true, user: { email, name: user.name } });
-});
-
-app.post('/api/auth/google-login', (req, res) => {
-  const { email, name, picture } = req.body;
-  if (!email) return res.status(400).json({ error: "Email is required" });
-
-  if (!users[email]) {
-    users[email] = {
-      name: name || "Google User",
-      picture: picture,
-      googleUser: true,
-      joinedAt: new Date().toISOString()
-    };
-    saveToDisk();
-  }
-
-  res.json({ success: true, user: { email, name: users[email].name, picture: users[email].picture } });
-});
-
-// ─── SMART AI DISPATCHER ───
-
-async function callOllama(prompt, maxTokens, config) {
-  const resp = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.key}`
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: maxTokens,
-      stream: false
-    })
-  });
-  if (!resp.ok) {
-    const errorText = await resp.text();
-    console.error(`Ollama Response Error (${resp.status}):`, errorText);
-    throw new Error(`Ollama Error: ${errorText}`);
-  }
-  const data = await resp.json();
-  return data.choices[0].message.content;
-}
-
-async function callAnthropic(prompt, maxTokens, config) {
-  const resp = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": config.key,
-      "anthropic-version": "2023-06-01"
-    },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!resp.ok) {
-    const errorText = await resp.text();
-    console.error(`Anthropic Response Error (${resp.status}):`, errorText);
-    throw new Error(`Anthropic Error: ${errorText}`);
-  }
-  const data = await resp.json();
-  return data.content[0].text;
-}
-
-async function callOpenAI(prompt, maxTokens, config) {
-  const resp = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.key}`
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: maxTokens
-    })
-  });
-  if (!resp.ok) {
-    const errorText = await resp.text();
-    console.error(`OpenAI Response Error (${resp.status}):`, errorText);
-    throw new Error(`OpenAI Error: ${errorText}`);
-  }
-  const data = await resp.json();
-  return data.choices[0].message.content;
-}
-
-// ─── SMART AI DISPATCHER HELPER ───
-
-async function handleAIRequest(prompt, maxTokens = 1000) {
-  const PROVIDERS = getProviders();
-  let result = null;
-  let engine = "None";
-
-  // 1. Try Ollama (Primary Free)
-  if (PROVIDERS.OLLAMA.key) {
-    try {
-      result = await callOllama(prompt, maxTokens, PROVIDERS.OLLAMA);
-      engine = "Ollama Cloud";
-    } catch (e) { console.warn("Ollama fallback triggered:", e.message); }
-  }
-
-  // 2. Try Anthropic (Legal Premium)
-  if (!result && PROVIDERS.ANTHROPIC.key) {
-    try {
-      result = await callAnthropic(prompt, maxTokens, PROVIDERS.ANTHROPIC);
-      engine = "Anthropic Claude";
-    } catch (e) { console.warn("Anthropic fallback triggered:", e.message); }
-  }
-
-  // 3. Try OpenAI (Fast Alternative)
-  if (!result && PROVIDERS.OPENAI.key) {
-    try {
-      result = await callOpenAI(prompt, maxTokens, PROVIDERS.OPENAI);
-      engine = "OpenAI GPT-4";
-    } catch (e) { console.warn("Final fallback failed:", e.message); }
-  }
-
-  if (!result) throw new Error("No AI provider keys available or services down.");
-  return { text: result, engine };
-}
-
-app.post('/ai/ask', async (req, res) => {
-  const { prompt, maxTokens = 1000 } = req.body;
-  try {
-    const { text, engine } = await handleAIRequest(prompt, maxTokens);
-    res.json({ content: [{ text }], engine });
-  } catch (err) {
-    console.error("Dispatcher Error:", err);
-    res.status(500).json({ error: "Failed to communicate with AI engines." });
-  }
-});
-
-// ─── GROQ LEGAL ASSISTANT ENDPOINT ───
-
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// ─── LEGAL ASSISTANT ENDPOINT ───
 
 const LEGAL_SYSTEM_PROMPT = `You are an AI Legal Assistant for Indian citizens.
 
@@ -283,35 +73,8 @@ app.post('/api/legal-chat', async (req, res) => {
       { role: "user", content: message }
     ];
 
-    const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: messages,
-        max_tokens: 2048,
-        temperature: 0.7,
-        top_p: 0.9
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Groq API Error (${response.status}):`, errorText);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't process your request right now.";
-
-    res.json({
-      text: aiResponse,
-      model: GROQ_MODEL,
-      usage: data.usage
-    });
+    const { text, model, usage } = await chatCompletion({ messages, maxTokens: 2048, temperature: 0.7 });
+    res.json({ text, model, usage });
   } catch (err) {
     console.error("Legal Chat Error:", err.message);
     res.status(500).json({ 
@@ -343,25 +106,11 @@ Provide your response strictly as a valid JSON object matching exactly this sche
 Case Description: "${description}"
 `;
 
-    // Free AI endpoint without API keys via Pollinations
-    const fetchRes = await fetch('https://text.pollinations.ai/', {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        messages: [{role: "user", content: prompt}],
-        jsonMode: true
-      })
+    const { text } = await chatCompletion({
+      messages: [{ role: "user", content: prompt }],
+      maxTokens: 800, temperature: 0.4, json: true
     });
-    
-    const textOutput = await fetchRes.text();
-    let out;
-    try {
-      out = JSON.parse(textOutput);
-    } catch(err) {
-      // Clean up markdown block if pollinations wraps the json
-      const cleanJson = textOutput.replace(/```json/g, '').replace(/```/g, '').trim();
-      out = JSON.parse(cleanJson);
-    }
+    const out = parseJSONLoose(text);
 
     res.json(out);
   } catch(e) {
@@ -494,31 +243,15 @@ DEPONENT: ______________`
     Details: ${JSON.stringify(details)}
     Output in a professional legal style, NOT a JSON object. Ensure it is at least 600 words long.`;
 
-    const fetchRes = await fetch('https://text.pollinations.ai/', {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        messages: [
-          {role: "system", content: "You are an expert Indian Solicitor. You draft real-world, binding legal documents. You only return the document text itself, no explanations, no JSON, no reasoning."},
-          {role: "user", content: prompt}
-        ],
-        model: "openai",
-        jsonMode: false
-      })
+    const { text: rawOutput } = await chatCompletion({
+      messages: [
+        {role: "system", content: "You are an expert Indian Solicitor. You draft real-world, binding legal documents. You only return the document text itself, no explanations, no JSON, no reasoning."},
+        {role: "user", content: prompt}
+      ],
+      maxTokens: 3000, temperature: 0.4
     });
-    
-    let rawOutput = (await fetchRes.text()).trim();
-    let textOutput = rawOutput;
+    let textOutput = rawOutput.trim();
 
-    // Try to parse if it returned JSON instead of raw text
-    try {
-      const parsed = JSON.parse(rawOutput);
-      if (parsed.content) textOutput = parsed.content;
-      else if (parsed.choices?.[0]?.message?.content) textOutput = parsed.choices[0].message.content;
-    } catch(e) {
-      // It's already raw text (or broken JSON), keep as is
-    }
-    
     // Clean up markdown/JSON markers if they appear
     textOutput = textOutput.replace(/```json/g, "").replace(/```/g, "").trim();
 
@@ -571,29 +304,20 @@ Response Format (JSON ONLY):
   ]
 }`;
 
-    const fetchRes = await fetch('https://text.pollinations.ai/', {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
+    let textOutput = "";
+    try {
+      ({ text: textOutput } = await chatCompletion({
         messages: [
           {role: "system", content: "You are an AI Forensic Analyst. Analyze the document context and logic. Output ONLY JSON."},
           {role: "user", content: prompt}
         ],
-        model: "openai"
-      })
-    });
-
-    let textOutput = (await fetchRes.text()).trim();
-    
-    // Clean up if AI adds markdown backticks
-    if (textOutput.includes('```')) {
-      textOutput = textOutput.split('```')[1];
-      if (textOutput.startsWith('json')) textOutput = textOutput.replace(/^json/, '');
-    }
+        maxTokens: 1000, temperature: 0.2, json: true
+      }));
+    } catch (e) { throw e; }
 
     let result;
     try {
-      result = JSON.parse(textOutput);
+      result = parseJSONLoose(textOutput);
     } catch(e) {
       console.log("[PARSING FAILED] Raw Output:", textOutput);
       result = {

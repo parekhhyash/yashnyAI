@@ -6,9 +6,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { GoogleLogin } from '@react-oauth/google';
-import { API_BASE } from '../config/api';
-import {jwtDecode} from 'jwt-decode';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 
 const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,71 +15,47 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setNotice("");
 
-    try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-      const payload = isLogin ? { email, password } : { email, password, name };
-      
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem("nyai_user_email", email);
-        if (setUserEmail) setUserEmail(email);
-        setIsLoggedIn(true);
-        navigate('/chat');
-      } else {
-        setError(data.error || "Authentication failed");
-      }
-    } catch (err) {
-      setError("Server connection failed. Is the backend on 5001?");
-    } finally {
+    if (!isSupabaseConfigured) {
+      setError("Authentication is not configured.");
       setIsLoading(false);
+      return;
     }
-  };
 
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setIsLoading(true);
-    setError("");
-    
     try {
-      const decoded = jwtDecode(credentialResponse.credential);
-      console.log("Decoded Google User:", decoded);
-
-      const response = await fetch(`${API_BASE}/api/auth/google-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: decoded.email,
-          name: decoded.name,
-          picture: decoded.picture
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem("nyai_user_email", decoded.email);
-        if (setUserEmail) setUserEmail(decoded.email);
+      if (isLogin) {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        if (authError) throw authError;
+        if (setUserEmail) setUserEmail(data.user.email);
         setIsLoggedIn(true);
         navigate('/chat');
       } else {
-        setError(data.error || "Google login failed sync.");
+        const { data, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { name }, emailRedirectTo: window.location.origin }
+        });
+        if (authError) throw authError;
+        if (data.session) {
+          if (setUserEmail) setUserEmail(data.user.email);
+          setIsLoggedIn(true);
+          navigate('/chat');
+        } else {
+          // Email confirmation is enabled: the user must confirm via the emailed link.
+          setNotice("Account created! Check your email to confirm your address, then log in.");
+          setIsLogin(true);
+        }
       }
     } catch (err) {
-      console.error("Auth Exception:", err);
-      setError("Sync failed. Check connection to backend on port 5001.");
+      setError(err.message || "Authentication failed");
     } finally {
       setIsLoading(false);
     }
@@ -158,6 +132,12 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
                   </motion.div>
                 )}
 
+                {notice && (
+                  <div className="p-4 bg-lime/10 border border-lime/30 rounded-2xl text-[10px] font-black text-forest flex items-center gap-2 uppercase tracking-widest">
+                    <CheckCircle2 size={16} /> {notice}
+                  </div>
+                )}
+
                 <AnimatePresence mode="wait">
                    {!isLogin && (
                      <motion.div 
@@ -197,6 +177,7 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
                    <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-forest transition-colors" size={24} />
                    <input 
                       type="password" 
+                      minLength={6}
                       placeholder="Password" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -222,47 +203,6 @@ const AuthPage = ({ setIsLoggedIn, setUserEmail }) => {
                      </>
                    )}
                 </button>
-
-                <div className="relative py-2">
-                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-                   <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest text-gray-300 bg-white px-4">Social Entry</div>
-                </div>
-
-                <div className="flex flex-col gap-4 items-center">
-                   <div className="w-full flex justify-center">
-                      <GoogleLogin 
-                        onSuccess={handleGoogleSuccess}
-                        onError={() => setError("Google Authentication Failed")}
-                        theme="filled_black"
-                        shape="pill"
-                        size="large"
-                        text="continue_with"
-                        width="300"
-                      />
-                   </div>
-
-                   {/* Mock Auth Bypass for Testing without Google Client ID Setup */}
-                   <button 
-                     type="button"
-                     onClick={() => {
-                        const mockPayload = JSON.stringify({ 
-                           email: email || "tester@nyai.com", 
-                           name: name || "Developer Mode", 
-                           picture: "https://i.pravatar.cc/150" 
-                        });
-                        handleGoogleSuccess({
-                           credential: `mock_header.${btoa(mockPayload)}.mock_signature`
-                        });
-                     }}
-                     className="text-[10px] font-black text-lime uppercase tracking-widest bg-forest px-4 py-2 rounded-full hover:bg-forest/80 transition-all opacity-40 hover:opacity-100"
-                   >
-                     🚀 Enter as Tester (Mock OAuth)
-                   </button>
-                   
-                   <p className="text-[9px] text-gray-300 font-bold max-w-[200px] text-center italic mt-2 uppercase tracking-tight">
-                     Server Persistence: All details stored in <span className="text-lime">backend/users.json</span>
-                   </p>
-                </div>
              </form>
 
             <div className="mt-12 text-center">
